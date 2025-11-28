@@ -42,6 +42,7 @@ const createGraphClient = async (accessToken, sub) => {
       authProvider: (done) => {
         done(null, exchangedToken);
       },
+      baseUrl: process.env.MICROSOFT_GRAPH_ENDPOINT || 'https://graph.microsoft.com',
     });
 
     return graphClient;
@@ -69,10 +70,11 @@ const exchangeTokenForGraphAccess = async (config, accessToken, sub) => {
       return cachedToken.access_token;
     }
 
+    const graphEndpoint = process.env.MICROSOFT_GRAPH_ENDPOINT || 'https://graph.microsoft.com';
     const graphScopes = process.env.OPENID_GRAPH_SCOPES || 'User.Read,People.Read,Group.Read.All';
     const scopeString = graphScopes
       .split(',')
-      .map((scope) => `https://graph.microsoft.com/${scope}`)
+      .map((scope) => new URL(scope.trim(), graphEndpoint).toString())
       .join(' ');
 
     const grantResponse = await client.genericGrantRequest(
@@ -198,9 +200,7 @@ const getUserOwnedEntraGroups = async (accessToken, sub) => {
       allGroupIds.push(...groups.map((group) => group.id));
 
       nextLink = response['@odata.nextLink']
-        ? response['@odata.nextLink']
-            .replace(/^https:\/\/graph\.microsoft\.com\/v1\.0/, '')
-            .trim() || null
+        ? response['@odata.nextLink'].replace(/^https?:\/\/[^/]+\/v1\.0/, '')
         : null;
     }
 
@@ -236,9 +236,7 @@ const getGroupMembers = async (accessToken, sub, groupId) => {
       });
 
       nextLink = membersResponse['@odata.nextLink']
-        ? membersResponse['@odata.nextLink']
-            .replace(/^https:\/\/graph\.microsoft\.com\/v1\.0/, '')
-            .trim() || null
+        ? membersResponse['@odata.nextLink'].replace(/^https?:\/\/[^/]+\/v1\.0/, '')
         : null;
     }
 
@@ -269,7 +267,7 @@ const getGroupOwners = async (accessToken, sub, groupId) => {
       allOwners.push(...owners.map((member) => member.id));
 
       nextLink = ownersResponse['@odata.nextLink']
-        ? ownersResponse['@odata.nextLink'].split('/v1.0')[1]
+        ? ownersResponse['@odata.nextLink'].replace(/^https?:\/\/[^/]+\/v1\.0/, '')
         : null;
     }
 

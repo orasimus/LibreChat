@@ -862,6 +862,68 @@ describe('setupOpenId', () => {
     });
   });
 
+  describe('National Cloud Support for Group Overage', () => {
+    const nationalCloudEndpoints = [
+      { name: 'Global', url: 'https://graph.microsoft.com' },
+      { name: 'US Government GCC High', url: 'https://graph.microsoft.us' },
+      { name: 'US Government DOD', url: 'https://dod-graph.microsoft.us' },
+      { name: 'China (21Vianet)', url: 'https://microsoftgraph.chinacloudapi.cn' },
+    ];
+
+    nationalCloudEndpoints.forEach(({ name, url }) => {
+      it(`should use ${name} endpoint for OBO token exchange and Graph API call`, async () => {
+        const openidClient = require('openid-client');
+        const originalEnv = process.env.MICROSOFT_GRAPH_ENDPOINT;
+        process.env.MICROSOFT_GRAPH_ENDPOINT = url;
+        process.env.OPENID_REQUIRED_ROLE = 'group-required';
+        process.env.OPENID_REQUIRED_ROLE_PARAMETER_PATH = 'groups';
+        process.env.OPENID_REQUIRED_ROLE_TOKEN_KIND = 'id';
+
+        jwtDecode.mockReturnValue({ hasgroups: true });
+
+        await setupOpenId();
+        verifyCallback = require('openid-client/passport').__getVerifyCallbackByName('openid');
+
+        undici.fetch.mockResolvedValue({
+          ok: true,
+          status: 200,
+          statusText: 'OK',
+          json: async () => ({ value: ['group-required'] }),
+        });
+
+        await validate(tokenset);
+
+        // Verify OBO exchange uses correct endpoint in scope
+        expect(openidClient.genericGrantRequest).toHaveBeenCalledWith(
+          expect.anything(),
+          'urn:ietf:params:oauth:grant-type:jwt-bearer',
+          expect.objectContaining({
+            scope: `${url}/User.Read`,
+            assertion: tokenset.access_token,
+            requested_token_use: 'on_behalf_of',
+          }),
+        );
+
+        // Verify Graph API call uses correct endpoint
+        expect(undici.fetch).toHaveBeenCalledWith(
+          `${url}/v1.0/me/getMemberObjects`,
+          expect.objectContaining({
+            headers: expect.objectContaining({
+              Authorization: 'Bearer exchanged_graph_token',
+            }),
+          }),
+        );
+
+        // Restore original env
+        if (originalEnv) {
+          process.env.MICROSOFT_GRAPH_ENDPOINT = originalEnv;
+        } else {
+          delete process.env.MICROSOFT_GRAPH_ENDPOINT;
+        }
+      });
+    });
+  });
+
   describe('admin role group overage', () => {
     it('resolves admin groups via Graph when overage is detected for admin role', async () => {
       process.env.OPENID_REQUIRED_ROLE = 'group-required';

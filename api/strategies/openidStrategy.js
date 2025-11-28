@@ -345,11 +345,12 @@ async function exchangeTokenForOverage(accessToken, sub) {
     return cached.access_token;
   }
 
+  const graphEndpoint = process.env.MICROSOFT_GRAPH_ENDPOINT || 'https://graph.microsoft.com';
   const grantResponse = await client.genericGrantRequest(
     openidConfig,
     'urn:ietf:params:oauth:grant-type:jwt-bearer',
     {
-      scope: 'https://graph.microsoft.com/User.Read',
+      scope: new URL('/User.Read', graphEndpoint).toString(),
       assertion: accessToken,
       requested_token_use: 'on_behalf_of',
     },
@@ -397,7 +398,8 @@ async function resolveGroupsFromOverage(accessToken, sub) {
 
     // Use /me/getMemberObjects so least-privileged delegated permission User.Read is sufficient
     // when resolving the signed-in user's group membership.
-    const url = 'https://graph.microsoft.com/v1.0/me/getMemberObjects';
+    const graphEndpoint = process.env.MICROSOFT_GRAPH_ENDPOINT || 'https://graph.microsoft.com';
+    const url = new URL('/v1.0/me/getMemberObjects', graphEndpoint).toString();
 
     logger.debug(
       `[openidStrategy] Detected group overage, resolving groups via Microsoft Graph getMemberObjects: ${url}`,

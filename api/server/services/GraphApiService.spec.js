@@ -153,6 +153,7 @@ describe('GraphApiService', () => {
       expect(getOpenIdConfig).toHaveBeenCalled();
       expect(Client.init).toHaveBeenCalledWith({
         authProvider: expect.any(Function),
+        baseUrl: expect.stringMatching('https://graph.microsoft.com'),
       });
       expect(result).toBe(mockGraphClient);
     });
